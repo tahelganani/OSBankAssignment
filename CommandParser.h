@@ -2,6 +2,7 @@
 #define COMMANDPARSER_H
 
 #include <string>
+#include <sstream>
 #include "Command.h"
 using std::string;
 using std::istringstream;
