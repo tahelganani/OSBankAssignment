@@ -135,7 +135,6 @@ void CommandHandler::closeAccount(const Command& command) {
         << snapshot.balanceUSD << " USD";
     bank.logger.log(output.str());
     bank.removeAccountUnsafe(command.accountId);
-    account->getLock().writersUnlock();
     
     bank.logger.log(output.str());
     bank.accountsLock.writersUnlock();
@@ -156,7 +155,7 @@ void CommandHandler::deposit(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : yout transaction failed - password for account " << 
+            " : your transaction failed - password for account " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().writersUnlock();
