@@ -23,6 +23,15 @@ static string accountDoesNotExistMessage(int ATMId, int accountId) {
     return output.str();
 }
 
+static int convertAmount(int amount, Currency sourceCurrency, Currency targetCurrency) {
+    if(sourceCurrency == Currency::USD && targetCurrency == Currency::ILS) {
+        return amount*5;
+    }
+    if(sourceCurrency == Currency::ILS && targetCurrency == Currency::USD) {
+        return (amount + 2)/5; //round to the nearest int, not just down.
+    }
+    return amount;
+}
 CommandHandler::CommandHandler(Bank& bank) : bank(bank) {}
 
 void CommandHandler::executeCommand(const Command& command, bool isRegularATM) {
@@ -61,15 +70,15 @@ void CommandHandler::executeCommand(const Command& command, bool isRegularATM) {
             break;
         
         case CommandType::TRANSFER:
-            //openAccount(command);
+            transfer(command);
             break;
         
         case CommandType::EXCHANGE:
-            //deposit(command);
+            exchange(command);
             break;
 
         case CommandType::INVEST:
-            //openAccount(command);
+            //invest(command);
             break;
         
         case CommandType::INVALID:
@@ -121,7 +130,7 @@ void CommandHandler::closeAccount(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : yout transaction failed - password for account " << 
+            " : Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
 
@@ -155,7 +164,7 @@ void CommandHandler::deposit(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : your transaction failed - password for account " << 
+            " : Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().writersUnlock();
@@ -189,7 +198,7 @@ void CommandHandler::withdraw(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : yout transaction failed - password for account " << 
+            " : Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().writersUnlock();
@@ -200,7 +209,7 @@ void CommandHandler::withdraw(const Command& command) {
         AccountSnapshot snapshot = account->getAccountSnapshot();
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : yout transaction failed - account id " << command.accountId 
+            " : Your transaction failed - account id " << command.accountId 
             << " balance is " << snapshot.balanceILS << " ILS and " <<
             snapshot.balanceUSD << " USD is lower than " <<command.amount <<
             " " << currencyToString(command.currency);
@@ -236,7 +245,7 @@ void CommandHandler::balance(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : yout transaction failed - password for account " << 
+            " : Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().readersUnlock();
@@ -269,3 +278,131 @@ void CommandHandler::sleepCommand(const Command& command) {
     usleep(command.timeMs*1000);
 }
 
+void CommandHandler::transfer(const Command& command) {
+    bank.accountsLock.readersLock();
+
+    Account* sourceAccount = bank.findAccountUnsafe(command.accountId);
+    if(sourceAccount == nullptr) {
+        ostringstream output;
+        bank.logger.log(accountDoesNotExistMessage(command.sourceAtmId,
+            command.accountId));
+
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+    Account* targetAccount = bank.findAccountUnsafe(command.targetAccountId);
+    if(targetAccount == nullptr) {
+        ostringstream output;
+        bank.logger.log(accountDoesNotExistMessage(command.sourceAtmId,
+            command.targetAccountId));
+
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+    Account* firstAccount = sourceAccount;
+    Account* secondAccount =  sourceAccount;
+    if(command.targetAccountId < command.accountId) {
+        firstAccount = targetAccount;
+        secondAccount = sourceAccount;
+    }
+
+    firstAccount->getLock().writersLock();
+    secondAccount->getLock().writersLock();
+
+    if(!sourceAccount->checkPassword(command.password)) {
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            ": Your transaction failed - password for account id " << 
+            command.accountId << " is incorrect";
+        bank.logger.log(output.str());
+        secondAccount->getLock().writersUnlock();
+        firstAccount->getLock().writersUnlock();
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    if(sourceAccount->getBalance(command.currency) < command.amount) {
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            ": Your transaction failed - balance of account id " <<
+            command.accountId << " is lower than " << command.amount <<
+            " " << currencyToString(command.currency);
+        bank.logger.log(output.str());
+        secondAccount->getLock().writersUnlock();
+        firstAccount->getLock().writersUnlock();
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+    sourceAccount->withdraw(command.amount, command.currency);
+    targetAccount->deposit(command.amount, command.currency);
+    AccountSnapshot sourceSnapshot = sourceAccount->getAccountSnapshot();
+    AccountSnapshot targetSnapshot = targetAccount->getAccountSnapshot();
+    ostringstream output;
+    output << command.sourceAtmId << ": Transfer " << command.amount <<
+        " " << currencyToString(command.currency) << " from account " <<
+        command.accountId << " to account " << command.targetAccountId 
+        << " new account balance is " << sourceSnapshot.balanceILS << " ILS and "
+        << sourceSnapshot.balanceUSD << " USD new target account balance is " 
+        << targetSnapshot.balanceILS << " ILS and " << 
+        targetSnapshot.balanceUSD << " USD";
+    bank.logger.log(output.str());
+    secondAccount->getLock().writersUnlock();
+    firstAccount->getLock().writersUnlock();
+    bank.accountsLock.readersUnlock();
+}
+
+void CommandHandler::exchange(const Command& command) {
+    bank.accountsLock.readersLock();
+
+    Account* account = bank.findAccountUnsafe(command.accountId);
+    if(account == nullptr) {
+        ostringstream output;
+        bank.logger.log(accountDoesNotExistMessage(command.sourceAtmId, command.accountId));
+
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    account->getLock().writersLock();
+
+    if(!account->checkPassword(command.password)) {
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            " : Your transaction failed - password for account id " << 
+            command.accountId << " is incorrect";
+        bank.logger.log(output.str());
+        account->getLock().writersUnlock();
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    if(account->getBalance(command.sourceCurrency) < command.amount) {
+        AccountSnapshot snapshot = account->getAccountSnapshot();
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            ": Your transaction failed - account id " << command.accountId <<
+            " balance is " << snapshot.balanceILS << " ILS and " <<
+            snapshot.balanceUSD << " USD is lower than " << command.amount <<
+            " " << currencyToString(command.sourceCurrency);
+        bank.logger.log(output.str());
+        account->getLock().writersUnlock();
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    int convertedAmount = convertAmount(command.amount, command.sourceCurrency,
+        command.targetCurrency);
+    account->withdraw(command.amount, command.sourceCurrency);
+    account->deposit(convertedAmount, command.targetCurrency);
+    AccountSnapshot snapshot = account->getAccountSnapshot();
+
+    ostringstream output;
+
+    output << command.sourceAtmId << ": Account " << command.accountId <<
+        " new balance is " << snapshot.balanceILS << " ILS and " <<
+        snapshot.balanceUSD << " USD after " << command.amount << " "
+        << currencyToString(command.currency) << " was exchanged";
+    bank.logger.log(output.str());
+    account->getLock().writersUnlock();
+    bank.accountsLock.readersUnlock();
+}
