@@ -39,7 +39,7 @@ bool ATM::isClosed() {
 void ATM::run() {
     ifstream inputfile(inputFilePath);
     if(!inputfile.is_open()) {
-        cerr << "Bank error: illegal argiments" << endl;
+        cerr << "Bank error: illegal arguments" << endl;
         return;
     }
     string line;

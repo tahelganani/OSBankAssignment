@@ -130,7 +130,7 @@ void CommandHandler::closeAccount(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : Your transaction failed - password for account id " << 
+            ": Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
 
@@ -144,8 +144,6 @@ void CommandHandler::closeAccount(const Command& command) {
         << snapshot.balanceUSD << " USD";
     bank.logger.log(output.str());
     bank.removeAccountUnsafe(command.accountId);
-    
-    bank.logger.log(output.str());
     bank.accountsLock.writersUnlock();
 }
 
@@ -164,7 +162,7 @@ void CommandHandler::deposit(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : Your transaction failed - password for account id " << 
+            ": Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().writersUnlock();
@@ -198,7 +196,7 @@ void CommandHandler::withdraw(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : Your transaction failed - password for account id " << 
+            ": Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().writersUnlock();
@@ -209,7 +207,7 @@ void CommandHandler::withdraw(const Command& command) {
         AccountSnapshot snapshot = account->getAccountSnapshot();
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : Your transaction failed - account id " << command.accountId 
+            ": Your transaction failed - account id " << command.accountId 
             << " balance is " << snapshot.balanceILS << " ILS and " <<
             snapshot.balanceUSD << " USD is lower than " <<command.amount <<
             " " << currencyToString(command.currency);
@@ -245,7 +243,7 @@ void CommandHandler::balance(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : Your transaction failed - password for account id " << 
+            ": Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().readersUnlock();
@@ -300,7 +298,7 @@ void CommandHandler::transfer(const Command& command) {
         return;
     }
     Account* firstAccount = sourceAccount;
-    Account* secondAccount =  sourceAccount;
+    Account* secondAccount =  targetAccount;
     if(command.targetAccountId < command.accountId) {
         firstAccount = targetAccount;
         secondAccount = sourceAccount;
@@ -368,7 +366,7 @@ void CommandHandler::exchange(const Command& command) {
     if(!account->checkPassword(command.password)) {
         ostringstream output;
         output << "Error " << command.sourceAtmId << 
-            " : Your transaction failed - password for account id " << 
+            ": Your transaction failed - password for account id " << 
             command.accountId << " is incorrect";
         bank.logger.log(output.str());
         account->getLock().writersUnlock();
@@ -401,7 +399,7 @@ void CommandHandler::exchange(const Command& command) {
     output << command.sourceAtmId << ": Account " << command.accountId <<
         " new balance is " << snapshot.balanceILS << " ILS and " <<
         snapshot.balanceUSD << " USD after " << command.amount << " "
-        << currencyToString(command.currency) << " was exchanged";
+        << currencyToString(command.sourceCurrency) << " was exchanged";
     bank.logger.log(output.str());
     account->getLock().writersUnlock();
     bank.accountsLock.readersUnlock();
