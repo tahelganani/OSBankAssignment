@@ -102,7 +102,7 @@ void Bank::runWorkers() {
         atms[i]->start();
     }
     for(size_t i = 0 ; i < atms.size() ; i++) {
-        VIPHandlers[i]->join();
+        atms[i]->join();
     }
 
     vipQueue.close();
