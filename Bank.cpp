@@ -1,4 +1,6 @@
 #include "Bank.h"
+#include "ATM.h"
+#include "VIPHandler.h"
 
 Bank::Bank() : bankAccount(0, 0, 0, 0) {
     pthread_mutex_init(&closeRequestsLock, nullptr);
@@ -8,6 +10,12 @@ Bank::Bank() : bankAccount(0, 0, 0, 0) {
 Bank::~Bank() {
     for(auto it = accounts.begin(); it != accounts.end(); ++it) {
         delete it->second;   
+    }
+    for(size_t i = 0 ; i < atms.size() ; i++) {
+        delete atms[i];
+    }
+    for(size_t i = 0 ; i < VIPHandlers.size() ; i++) {
+        delete VIPHandlers[i];
     }
     pthread_mutex_destroy(&rollbackRequestsLock);
     pthread_mutex_destroy(&closeRequestsLock);
@@ -69,5 +77,38 @@ void Bank::addATM(ATM* atm) {
 
 void Bank::addVIPHandler(VIPHandler* vipHandler) {
     VIPHandlers.push_back(vipHandler);
+}
+
+void Bank::closeVIPQueue() {
+    vipQueue.close();
+}
+
+void Bank::initializeWorkers(int numberOfVIPHandlers, int argc, char* argv[]) {
+    for(int i = 0 ; i < numberOfVIPHandlers ; i++) {
+        VIPHandler* handler = new VIPHandler(*this);
+        VIPHandlers.push_back(handler);
+    }
+    for(int i = 2 ; i < argc ; i++) {
+        int atmId = i - 1;
+        ATM* atm = new ATM(atmId, argv[i], *this);
+        atms.push_back(atm);
+    }
+}
+void Bank::runWorkers() {
+    for(size_t i = 0 ; i < VIPHandlers.size() ; i++) {
+        VIPHandlers[i]->start();
+    }
+    for(size_t i = 0 ; i < atms.size() ; i++) {
+        atms[i]->start();
+    }
+    for(size_t i = 0 ; i < atms.size() ; i++) {
+        VIPHandlers[i]->join();
+    }
+
+    vipQueue.close();
+
+    for(size_t i = 0 ; i < VIPHandlers.size() ; i++) {
+        VIPHandlers[i]->join();
+    }
 }
 

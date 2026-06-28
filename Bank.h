@@ -65,6 +65,8 @@ class Bank {
     void submitCloseATMRequest(int sourceATMId, int targetATMId);
     void submitRollbackRequest(int atmId, int iterations);
 
+    void closeVIPQueue();
+
 public:
     Bank();
     ~Bank();
@@ -75,6 +77,9 @@ public:
     void addATM(ATM* atm);
     void addVIPHandler(VIPHandler* vipHandler);
 
+    //bank lifecycle functions
+    void initializeWorkers(int numberOfVIPHandlers, int argc, char* argv[]);
+    void runWorkers();
 };
 
 #endif
