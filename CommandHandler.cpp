@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include <unistd.h>
+#include <cmath>
 
 using std::string;
 using std::ostringstream;
@@ -32,6 +33,13 @@ static int convertAmount(int amount, Currency sourceCurrency, Currency targetCur
     }
     return amount;
 }
+
+static int calculateInvestmentReturn(int amount, int timeMs) {
+    int periods = timeMs / 10;
+    double finalAmount = amount * std::pow(1.03, periods);
+    return static_cast<int>(std::round(finalAmount));
+}
+
 CommandHandler::CommandHandler(Bank& bank) : bank(bank) {}
 
 void CommandHandler::executeCommand(const Command& command, bool isRegularATM) {
@@ -78,7 +86,7 @@ void CommandHandler::executeCommand(const Command& command, bool isRegularATM) {
             break;
 
         case CommandType::INVEST:
-            //invest(command);
+            invest(command);
             break;
         
         case CommandType::INVALID:
@@ -427,3 +435,61 @@ void* CommandHandler::threadEntry(void* arg) {
     handler->run();
     return nullptr;
 }
+
+void CommandHandler::invest(const Command& command) {
+    bank.accountsLock.readersLock();
+
+    Account* account = bank.findAccountUnsafe(command.accountId);
+    if(account == nullptr) {
+        ostringstream output;
+        bank.logger.log(accountDoesNotExistMessage(command.sourceAtmId, command.accountId));
+
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    account->getLock().writersLock();
+
+    if(!account->checkPassword(command.password)) {
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            ": Your transaction failed - password for account id " << 
+            command.accountId << " is incorrect";
+        bank.logger.log(output.str());
+        account->getLock().writersUnlock();
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    if(account->getBalance(command.currency) < command.amount) {
+        AccountSnapshot snapshot = account->getAccountSnapshot();
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            ": Your transaction failed - account id " << command.accountId <<
+            " balance is " << snapshot.balanceILS << " ILS and " <<
+            snapshot.balanceUSD << " USD is lower than " << command.amount <<
+            " " << currencyToString(command.currency);
+        bank.logger.log(output.str());
+
+        account->getLock().writersUnlock();
+        bank.accountsLock.readersUnlock();
+        return;
+    }
+
+    account->withdraw(command.amount, command.currency);
+    account->getLock().writersUnlock();
+    bank.accountsLock.readersUnlock();
+
+    usleep(command.timeMs * 1000);
+
+    int finalAmount = calculateInvestmentReturn(command.amount, command.timeMs);
+    bank.accountsLock.readersLock();
+    account = bank.findAccountUnsafe(command.accountId);
+    if(account != nullptr) {
+        account->getLock().writersLock();
+        account->deposit(finalAmount, command.currency);
+        account->getLock().writersUnlock();
+    }
+    bank.accountsLock.readersUnlock();
+}
+
