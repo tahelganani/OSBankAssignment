@@ -31,7 +31,7 @@ struct RollbackRequest {
     int iterations;
 };
 
-struct BankSnapshots {
+struct BankSnapshot {
     vector<AccountSnapshot> snapshots;
     AccountSnapshot bankAccount;
 };
@@ -52,7 +52,7 @@ class Bank {
     queue<CloseATMRequest> closeRequests;
     queue<RollbackRequest> rollbackRequests;
 
-    deque<BankSnapshots> snapshots;
+    deque<BankSnapshot> snapshots;
 
     pthread_mutex_t closeRequestsLock;
     pthread_mutex_t rollbackRequestsLock;
@@ -66,6 +66,20 @@ class Bank {
     void submitRollbackRequest(int atmId, int iterations);
 
     void closeVIPQueue();
+
+    //Bank actions:
+    pthread_t statusThread;
+    bool shouldStopBank;
+    pthread_mutex_t shouldStopBankLock;
+    static void* statusThreadEntry(void* arg);
+    void statusLoop();
+    bool shouldStopBankRunning();
+    void stopBank();
+    BankSnapshot createSnapshotUnsafe();
+    void saveSnapshotUnsafe(const BankSnapshot& snapshot);
+    void printSnapshot(const BankSnapshot& snapshot);
+    void processCloseRequests();
+    void processRollbackRequests();
 
 public:
     Bank();

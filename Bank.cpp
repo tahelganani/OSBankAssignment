@@ -2,9 +2,10 @@
 #include "ATM.h"
 #include "VIPHandler.h"
 
-Bank::Bank() : bankAccount(0, 0, 0, 0) {
+Bank::Bank() : bankAccount(0, 0, 0, 0), shouldStopBank(false) {
     pthread_mutex_init(&closeRequestsLock, nullptr);
     pthread_mutex_init(&rollbackRequestsLock, nullptr);
+    pthread_mutex_init(&shouldStopBankLock, nullptr);
 }
 
 Bank::~Bank() {
@@ -17,6 +18,7 @@ Bank::~Bank() {
     for(size_t i = 0 ; i < VIPHandlers.size() ; i++) {
         delete VIPHandlers[i];
     }
+    pthread_mutex_destroy(&shouldStopBankLock);
     pthread_mutex_destroy(&rollbackRequestsLock);
     pthread_mutex_destroy(&closeRequestsLock);
 }
@@ -95,6 +97,8 @@ void Bank::initializeWorkers(int numberOfVIPHandlers, int argc, char* argv[]) {
     }
 }
 void Bank::runWorkers() {
+    pthread_create(&statusThread, nullptr, Bank::statusThreadEntry, this);
+
     for(size_t i = 0 ; i < VIPHandlers.size() ; i++) {
         VIPHandlers[i]->start();
     }
@@ -110,5 +114,7 @@ void Bank::runWorkers() {
     for(size_t i = 0 ; i < VIPHandlers.size() ; i++) {
         VIPHandlers[i]->join();
     }
+    stopBank();
+    pthread_join(statusThread, nullptr);
 }
 
