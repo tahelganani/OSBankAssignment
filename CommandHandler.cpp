@@ -107,6 +107,40 @@ void CommandHandler::openAccount(const Command& command) {
     bank.accountsLock.writersUnlock();
 }
 
+void CommandHandler::closeAccount(const Command& command) {
+    bank.accountsLock.writersLock();
+
+    Account* account = bank.findAccountUnsafe(command.accountId);
+    if(account == nullptr) {
+        ostringstream output;
+        bank.logger.log(accountDoesNotExistMessage(command.sourceAtmId, command.accountId));
+
+        bank.accountsLock.writersUnlock();
+        return;
+    }
+    if(!account->checkPassword(command.password)) {
+        ostringstream output;
+        output << "Error " << command.sourceAtmId << 
+            " : yout transaction failed - password for account " << 
+            command.accountId << " is incorrect";
+        bank.logger.log(output.str());
+
+        bank.accountsLock.writersUnlock();
+        return;
+    }
+    AccountSnapshot snapshot = account->getAccountSnapshot();
+    ostringstream output;
+    output << command.sourceAtmId << ": Account " <<command.accountId <<
+        " is now closed. Balance was " << snapshot.balanceILS << " ILS and " 
+        << snapshot.balanceUSD << " USD";
+    bank.logger.log(output.str());
+    bank.removeAccountUnsafe(command.accountId);
+    account->getLock().writersUnlock();
+    
+    bank.logger.log(output.str());
+    bank.accountsLock.writersUnlock();
+}
+
 void CommandHandler::deposit(const Command& command) {
     bank.accountsLock.readersLock();
 
@@ -220,5 +254,19 @@ void CommandHandler::balance(const Command& command) {
     bank.accountsLock.readersUnlock();
 }
 
+void CommandHandler::closeATM(const Command& command) {
+    bank.submitCloseATMRequest(command.sourceAtmId, command.targetAtmId);
+}
 
+void CommandHandler::rollBack(const Command& command) {
+    bank.submitRollbackRequest(command.sourceAtmId, command.iterations);
+}
+
+void CommandHandler::sleepCommand(const Command& command) {
+    ostringstream output;
+    output << command.sourceAtmId << ": Currently on a scheduled break." <<
+    " Service will resume within " << command.timeMs << " ms.";
+    bank.logger.log(output.str());
+    usleep(command.timeMs*1000);
+}
 
