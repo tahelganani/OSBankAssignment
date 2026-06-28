@@ -406,3 +406,11 @@ void CommandHandler::exchange(const Command& command) {
     account->getLock().writersUnlock();
     bank.accountsLock.readersUnlock();
 }
+
+void CommandHandler::submitVIPCommand(Command command) {
+    bank.vipQueue.push(command);
+}
+
+bool CommandHandler::getVIPCommand(Command& command) {
+    return bank.vipQueue.pop(command);
+}

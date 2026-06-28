@@ -11,6 +11,9 @@ protected:
     Bank& bank;
     explicit CommandHandler(Bank& bank);
     void executeCommand(const Command& command, bool isRegularATM);
+    //vip command helpers
+    void submitVIPCommand(Command command);
+    bool getVIPCommand(Command& command);
 
 private:
     void openAccount(const Command& command);

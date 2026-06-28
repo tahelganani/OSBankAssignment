@@ -60,7 +60,7 @@ void ATM::run() {
     while(!isClosed() && getline(inputfile, line)) {
         Command command = CommandParser::parseLine(line, ATMId);
         if(command.isVIP) {
-            //need to create VIPQueue and push the command into VIPQueue here
+            submitVIPCommand(command);
         } else {
             executeCommand(command, true);
         }
