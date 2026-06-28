@@ -414,3 +414,18 @@ void CommandHandler::submitVIPCommand(Command command) {
 bool CommandHandler::getVIPCommand(Command& command) {
     return bank.vipQueue.pop(command);
 }
+
+void CommandHandler::start() {
+    pthread_create(&thread, nullptr, 
+        CommandHandler::threadEntry, this);
+}
+
+void CommandHandler::join() {
+    pthread_join(thread, nullptr);
+}
+
+void* CommandHandler::threadEntry(void* arg) {
+    CommandHandler* handler = static_cast<CommandHandler*>(arg);
+    handler->run();
+    return nullptr;
+}

@@ -7,9 +7,14 @@
 using std::string;
 
 class CommandHandler {
+    pthread_t thread;
+    static void* threadEntry(void* arg);
 protected:
     Bank& bank;
     explicit CommandHandler(Bank& bank);
+
+    virtual void run() = 0;
+
     void executeCommand(const Command& command, bool isRegularATM);
     //vip command helpers
     void submitVIPCommand(Command command);
@@ -33,6 +38,9 @@ public:
 
     CommandHandler(const CommandHandler& other) = delete;
     CommandHandler& operator=(const CommandHandler& other) = delete;
+
+    void start();
+    void join();
 };
 
 #endif
