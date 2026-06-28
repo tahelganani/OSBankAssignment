@@ -9,12 +9,10 @@ using std::string;
 class ATM : public CommandHandler {
     int ATMId;
     string inputFilePath;
-    pthread_t thread;
     bool closed;
     pthread_mutex_t closedLock;
 
-    void run();
-    static void* threadEntry(void* arg);
+    void run() override;
 
 public:
     ATM(int ATMId, const string& inputFilePath, Bank& bank);
@@ -23,8 +21,6 @@ public:
     ATM(const ATM& other) = delete;
     ATM& operator=(const ATM& other) = delete;
 
-    void start();
-    void join();
     void requestClose();
     bool isClosed();
 
