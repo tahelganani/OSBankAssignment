@@ -10,6 +10,7 @@
 #include "Account.h"
 #include "RWLock.h"
 #include "Logger.h"
+#include "VIPQueue.h"
 
 using std::map;
 using std::vector;
@@ -46,6 +47,7 @@ class Bank {
     
     Account bankAccount;
     Logger logger;
+    VIPQueue vipQueue;
 
     queue<CloseATMRequest> closeRequests;
     queue<RollbackRequest> rollbackRequests;
