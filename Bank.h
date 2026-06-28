@@ -9,6 +9,7 @@
 
 #include "Account.h"
 #include "RWLock.h"
+#include "Logger.h"
 
 using std::map;
 using std::vector;
@@ -44,6 +45,7 @@ class Bank {
     vector<VIPHandler*> VIPHandlers;
     
     Account bankAccount;
+    Logger logger;
 
     queue<CloseATMRequest> closeRequests;
     queue<RollbackRequest> rollbackRequests;
