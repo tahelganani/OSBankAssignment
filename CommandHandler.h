@@ -32,11 +32,5 @@ public:
     CommandHandler& operator=(const CommandHandler& other) = delete;
 };
 
-class ATM : public CommandHandler {
-    int ATMId;
-    string inputFilePath;
-    pthread_t thread;
-};
-
 #endif
 
