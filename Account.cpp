@@ -52,4 +52,11 @@ AccountSnapshot Account::getAccountSnapshot() const {
     return snapshot;
 }
 
+void Account::restoreFromSnapshotUnsafe(const AccountSnapshot& snapshot) {
+    id = snapshot.id;
+    password = snapshot.password;
+    balanceILS = snapshot.balanceILS;
+    balanceUSD = snapshot.balanceUSD;
+}
+
 

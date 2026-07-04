@@ -34,6 +34,7 @@ public:
     bool withdraw(int amount, Currency currency);
 
     AccountSnapshot getAccountSnapshot() const;
+    void restoreFromSnapshot(const AccountSnapshot& snapshot);
 };
 
 #endif
