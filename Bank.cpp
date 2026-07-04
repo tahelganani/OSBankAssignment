@@ -161,7 +161,7 @@ void Bank::printSnapshot(const BankSnapshot& snapshot) {
     printf("\033[1;1H");
     printf("Current Bank Status\n");
     
-    for(size_t i = 0 ; i < snapshots.size() ; i++) {
+    for(size_t i = 0 ; i < snapshot.snapshots.size() ; i++) {
         const AccountSnapshot& account = snapshot.snapshots[i];
 
         printf("Account %d: Balance - %d ILS %d USD, Account Password - %04d\n" ,
