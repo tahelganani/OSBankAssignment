@@ -77,9 +77,12 @@ class Bank {
     void stopBank();
     BankSnapshot createSnapshotUnsafe();
     void saveSnapshotUnsafe(const BankSnapshot& snapshot);
+    void restoreSnapshotUnsafe(const BankSnapshot& snapshot);
     void printSnapshot(const BankSnapshot& snapshot);
     void processCloseRequests();
     void processRollbackRequests();
+
+    void chargeCommissions();
 
 public:
     Bank();

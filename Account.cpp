@@ -1,4 +1,5 @@
 #include "Account.h"
+#include <cmath>
 
 Account::Account(int id, int password, int balanceILS, int balanceUSD) :
     id(id), password(password), balanceILS(balanceILS), balanceUSD(balanceUSD) {}
@@ -57,6 +58,18 @@ void Account::restoreFromSnapshotUnsafe(const AccountSnapshot& snapshot) {
     password = snapshot.password;
     balanceILS = snapshot.balanceILS;
     balanceUSD = snapshot.balanceUSD;
+}
+
+void Account::chargeCommission(int percentage, int& commissionILS, int& commissionUSD) {
+    commissionILS = static_cast<int>(std::lround(static_cast<double>(balanceILS) * percentage / 100.0));
+    commissionUSD = static_cast<int>(std::lround(static_cast<double>(balanceUSD) * percentage / 100.0));
+    balanceILS -= commissionILS;
+    balanceUSD -= commissionUSD;
+}
+
+void Account::addToBalanceUnsafe(int amountILS, int amountUSD) {
+    balanceILS += amountILS;
+    balanceUSD += amountUSD;
 }
 
 

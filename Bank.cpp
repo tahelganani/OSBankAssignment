@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <sstream>
 #include <unistd.h>
+#include <cstdlib>
+#include <ctime>
 
 using std::endl;
 using std::ostringstream;
@@ -13,6 +15,7 @@ Bank::Bank() : bankAccount(0, 0, 0, 0), shouldStopBank(false) {
     pthread_mutex_init(&closeRequestsLock, nullptr);
     pthread_mutex_init(&rollbackRequestsLock, nullptr);
     pthread_mutex_init(&shouldStopBankLock, nullptr);
+    srand(static_cast<unsigned int>(time(nullptr)));
 }
 
 Bank::~Bank() {
@@ -224,12 +227,44 @@ void Bank::processCloseRequests() {
 }
 
 void Bank::processRollbackRequests() {
-    //TO-DO
+    while(1) {
+        pthread_mutex_lock(&rollbackRequestsLock);
+
+        if(rollbackRequests.empty()) {
+            pthread_mutex_unlock(&rollbackRequestsLock);
+            break;
+        }
+        RollbackRequest request = rollbackRequests.front();
+        rollbackRequests.pop();
+
+        pthread_mutex_unlock(&rollbackRequestsLock);
+
+        accountsLock.writersLock();
+        if(!snapshots.empty()) {
+            size_t snapshotIndex = 0;
+            if(static_cast<size_t>(request.iterations) < snapshots.size()) {
+                snapshotIndex = snapshots.size() - 1 - request.iterations;
+            }
+            restoreSnapshotUnsafe(snapshots[snapshotIndex]);
+        }
+        ostringstream output;
+         output << request.ATMId << ": Rollback to " << request.iterations <<
+            " bank iterations ago was completed successfully";
+        logger.log(output.str());
+        accountsLock.writersUnlock();
+    }
 }
 
 void Bank::statusLoop() {
+    int commissionCounter = 0;
+
     while(!shouldStopBankRunning()) {
         usleep(10000);
+        
+        if(shouldStopBankRunning()) {
+            break;
+        }
+    
         accountsLock.readersLock();
 
         BankSnapshot snapshot = createSnapshotUnsafe();
@@ -238,8 +273,15 @@ void Bank::statusLoop() {
         accountsLock.readersUnlock();
 
         printSnapshot(snapshot);
+
         processCloseRequests();
         processRollbackRequests();
+
+        commissionCounter++;
+        if(commissionCounter == 3) {
+            chargeCommissions();
+            commissionCounter = 0;
+        }
     }
 }
 
@@ -262,3 +304,27 @@ void Bank::stopBank() {
     pthread_mutex_unlock(&shouldStopBankLock);
 }
 
+void Bank::chargeCommissions() {
+    int percentage = rand() % 5 + 1;
+    accountsLock.readersLock();
+    for(auto it = accounts.begin() ; it != accounts.end() ; ++it) {
+        Account* account = it->second;
+        account->getLock().writersLock();
+        
+        int commissionILS = 0;
+        int commissionUSD = 0;
+
+        account->chargeCommission(percentage, commissionILS, commissionUSD);
+        bankAccount.getLock().writersLock();
+        bankAccount.addToBalanceUnsafe(commissionILS, commissionUSD);
+        bankAccount.getLock().writersUnlock();
+
+        ostringstream output;
+        output << "Bank: commissions of " << percentage <<
+            " % were charged, bank gained " << commissionILS << " ILS and " 
+            << commissionUSD << " USD from account " << it->first;
+        logger.log(output.str());
+        account->getLock().writersUnlock();
+    }
+    accountsLock.readersUnlock();
+}

@@ -34,7 +34,10 @@ public:
     bool withdraw(int amount, Currency currency);
 
     AccountSnapshot getAccountSnapshot() const;
-    void restoreFromSnapshot(const AccountSnapshot& snapshot);
+    void restoreFromSnapshotUnsafe(const AccountSnapshot& snapshot);
+
+    void chargeCommission(int percentage, int& commissionILS, int& commissionUSD);
+    void addToBalanceUnsafe(int amountILS, int amountUSD);
 };
 
 #endif
