@@ -3,6 +3,7 @@
 #include <sstream>
 #include <unistd.h>
 #include <cmath>
+#include <iomanip>
 
 using std::string;
 using std::ostringstream;
@@ -116,7 +117,8 @@ void CommandHandler::openAccount(const Command& command) {
     bank.addAccountUnsafe(newAccount);
     ostringstream output;
     output << command.sourceAtmId << ": New account id is " <<
-        command.accountId << " with password " << command.password <<
+        command.accountId << " with password " << std::setw(4) << 
+        std::setfill('0') << command.password << std::setfill(' ') <<
         " and initial balance " << command.initialBalanceILS << " ILS and "
         << command.initialBalanceUSD << " USD";
     
