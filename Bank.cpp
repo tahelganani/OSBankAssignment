@@ -170,6 +170,23 @@ void Bank::printSnapshot(const BankSnapshot& snapshot) {
     fflush(stdout);
 }
 
+void Bank::restoreSnapshotUnsafe(const BankSnapshot& snapshot) {
+    for(auto it = accounts.begin() ; it != accounts.end() ; ++it) {
+        delete it->second;
+    }
+    accounts.clear();
+
+    for(size_t i = 0 ; i < snapshot.snapshots.size() ; i++) {
+        const AccountSnapshot& accountSnapshot = snapshot.snapshots[i];
+        Account* account = new Account(accountSnapshot.id, accountSnapshot.password,
+            accountSnapshot.balanceILS, accountSnapshot.balanceUSD);
+        accounts[accountSnapshot.id] = account;
+    }
+    bankAccount.getLock().writersLock();
+    bankAccount.restoreFromSnapshotUnsafe(snapshot.bankAccount);
+    bankAccount.getLock().writersUnlock();
+}
+
 void Bank::processCloseRequests() {
     while(1) {
         pthread_mutex_lock(&closeRequestsLock);
