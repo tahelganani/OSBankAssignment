@@ -11,9 +11,41 @@
 using std::endl;
 using std::ostringstream;
 
+static long long currentTimeMs() {
+    const long long MS_PER_SEC = 1000;
+    const long long NS_PER_MS = 1000000;
+    timespec currentTime;
+    clock_gettime(CLOCK_MONOTONIC, &currentTime);
+    long long secsMs = static_cast<long long>(currentTime.tv_sec) * MS_PER_SEC;
+    long long nsecsMs = static_cast<long long>(currentTime.tv_nsec) / NS_PER_MS;
+    return secsMs + nsecsMs;
+}
+
+static InvestmentSnapshot createInvestmentSnapshot(const Investment& investment, long long snapshotTimeMs) {
+    InvestmentSnapshot snapshot;
+    snapshot.accountId = investment.accountId;
+    snapshot.finalAmount = investment.finalAmount;
+    snapshot.currency = investment.currency;
+
+    long long remainingMs = investment.dueTimeMs - snapshotTimeMs;
+    if(remainingMs < 0) remainingMs = 0;
+    snapshot.remainingMs = remainingMs;
+    return snapshot;
+}
+
+static Investment restoreInvestmentFromSnapshot(const InvestmentSnapshot& snapshot, long long restoreTimeMs) {
+    Investment investment;
+    investment.accountId = snapshot.accountId;
+    investment.finalAmount = snapshot.finalAmount;
+    investment.currency = snapshot.currency;
+    investment.dueTimeMs = restoreTimeMs + snapshot.remainingMs;
+    return investment;
+}
+
 Bank::Bank() : bankAccount(0, 0, 0, 0), shouldStopBank(false) {
     pthread_mutex_init(&closeRequestsLock, nullptr);
     pthread_mutex_init(&rollbackRequestsLock, nullptr);
+    pthread_mutex_init(&activeInvestmentsLock, nullptr);
     pthread_mutex_init(&shouldStopBankLock, nullptr);
     srand(static_cast<unsigned int>(time(nullptr)));
 }
@@ -29,6 +61,7 @@ Bank::~Bank() {
         delete VIPHandlers[i];
     }
     pthread_mutex_destroy(&shouldStopBankLock);
+    pthread_mutex_destroy(&activeInvestmentsLock);
     pthread_mutex_destroy(&rollbackRequestsLock);
     pthread_mutex_destroy(&closeRequestsLock);
 }
@@ -143,6 +176,15 @@ BankSnapshot Bank::createSnapshotUnsafe() {
         bankSnapshot.snapshots.push_back(it->second->getAccountSnapshot());
     }
     bankSnapshot.bankAccount = bankAccount.getAccountSnapshot();
+    
+    long long snapshotTimeMs = currentTimeMs();
+    
+    pthread_mutex_lock(&activeInvestmentsLock);
+    for(size_t i = 0 ; i < activeInvestments.size() ; i++) {
+        bankSnapshot.investments.push_back(
+            createInvestmentSnapshot(activeInvestments[i], snapshotTimeMs));
+    }
+    pthread_mutex_unlock(&activeInvestmentsLock);
 
     bankAccount.getLock().readersUnlock();
 
@@ -188,6 +230,16 @@ void Bank::restoreSnapshotUnsafe(const BankSnapshot& snapshot) {
     bankAccount.getLock().writersLock();
     bankAccount.restoreFromSnapshotUnsafe(snapshot.bankAccount);
     bankAccount.getLock().writersUnlock();
+
+    long long restoreTimeMs = currentTimeMs();
+
+    pthread_mutex_lock(&activeInvestmentsLock);
+    activeInvestments.clear();
+    for(size_t i = 0 ; i < snapshot.investments.size() ; i++) {
+        activeInvestments.push_back(
+            restoreInvestmentFromSnapshot(snapshot.investments[i], restoreTimeMs));
+    }
+    pthread_mutex_unlock(&activeInvestmentsLock);
 }
 
 void Bank::processCloseRequests() {
@@ -258,12 +310,10 @@ void Bank::processRollbackRequests() {
 void Bank::statusLoop() {
     int commissionCounter = 0;
 
-    while(!shouldStopBankRunning()) {
+    while(!shouldStopBankRunning() || hasActiveInvestments() || hasPendingBankRequests()) {
         usleep(10000);
-        
-        if(shouldStopBankRunning()) {
-            break;
-        }
+
+        processInvestments();
     
         accountsLock.readersLock();
 
@@ -328,3 +378,66 @@ void Bank::chargeCommissions() {
     }
     accountsLock.readersUnlock();
 }
+
+void Bank::addInvestment(int accountId , int finalAmount, Currency currency, int timeMs) {
+    Investment investment;
+    investment.accountId = accountId;
+    investment.finalAmount = finalAmount;
+    investment.currency = currency;
+    investment.dueTimeMs = currentTimeMs() + timeMs;
+
+    pthread_mutex_lock(&activeInvestmentsLock);
+    activeInvestments.push_back(investment);
+    pthread_mutex_unlock(&activeInvestmentsLock);
+}
+
+void Bank::processInvestments() {
+    vector<Investment> finishedInvestments;
+    long long currentTime = currentTimeMs();
+    
+    pthread_mutex_lock(&activeInvestmentsLock);
+
+    for(size_t i = 0 ; i < activeInvestments.size() ; ) {
+        if(activeInvestments[i].dueTimeMs <= currentTime) {
+            finishedInvestments.push_back(activeInvestments[i]);
+            activeInvestments.erase(activeInvestments.begin() + i);
+        } else {
+            i++;
+        }
+    }
+
+    pthread_mutex_unlock(&activeInvestmentsLock);
+
+    for(size_t i = 0 ; i < finishedInvestments.size() ; i++) {
+        accountsLock.readersLock();
+
+        Account* account = findAccountUnsafe(finishedInvestments[i].accountId);
+        if(account != nullptr) {
+            account->getLock().writersLock();
+            account->deposit(finishedInvestments[i].finalAmount, finishedInvestments[i].currency);
+            account->getLock().writersUnlock();
+        }
+
+        accountsLock.readersUnlock();
+    }
+}
+
+bool Bank::hasActiveInvestments() {
+    pthread_mutex_lock(&activeInvestmentsLock);
+    bool result = !activeInvestments.empty();
+    pthread_mutex_unlock(&activeInvestmentsLock);
+    return result;
+}
+
+bool Bank::hasPendingBankRequests() {
+    pthread_mutex_lock(&closeRequestsLock);
+    bool hasCloseRequests = !closeRequests.empty();
+    pthread_mutex_unlock(&closeRequestsLock);
+
+    pthread_mutex_lock(&rollbackRequestsLock);
+    bool hasRollbackRequests = !rollbackRequests.empty();
+    pthread_mutex_unlock(&rollbackRequestsLock);
+
+    return hasCloseRequests || hasRollbackRequests;
+}
+

@@ -45,6 +45,7 @@ CommandHandler::CommandHandler(Bank& bank) : bank(bank) {}
 
 void CommandHandler::executeCommand(const Command& command, bool isRegularATM) {
     (void)isRegularATM;
+    bank.processInvestments();
     switch(command.type) {
         case CommandType::OPEN_ACCOUNT:
             openAccount(command);
@@ -478,20 +479,12 @@ void CommandHandler::invest(const Command& command) {
         return;
     }
 
-    account->withdraw(command.amount, command.currency);
-    account->getLock().writersUnlock();
-    bank.accountsLock.readersUnlock();
-
-    usleep(command.timeMs * 1000);
-
     int finalAmount = calculateInvestmentReturn(command.amount, command.timeMs);
-    bank.accountsLock.readersLock();
-    account = bank.findAccountUnsafe(command.accountId);
-    if(account != nullptr) {
-        account->getLock().writersLock();
-        account->deposit(finalAmount, command.currency);
-        account->getLock().writersUnlock();
-    }
+
+    account->withdraw(command.amount, command.currency);
+    bank.addInvestment(command.accountId, finalAmount, command.currency, command.timeMs);
+
+    account->getLock().writersUnlock();
     bank.accountsLock.readersUnlock();
 }
 

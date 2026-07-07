@@ -31,9 +31,24 @@ struct RollbackRequest {
     int iterations;
 };
 
+struct Investment {
+    int accountId;
+    int finalAmount;
+    Currency currency;
+    long long dueTimeMs;
+};
+
+struct InvestmentSnapshot {
+    int accountId;
+    int finalAmount;
+    Currency currency;
+    long long remainingMs;
+};
+
 struct BankSnapshot {
     vector<AccountSnapshot> snapshots;
     AccountSnapshot bankAccount;
+    vector<InvestmentSnapshot> investments;
 };
 
 class Bank {
@@ -53,9 +68,11 @@ class Bank {
     queue<RollbackRequest> rollbackRequests;
 
     deque<BankSnapshot> snapshots;
+    vector<Investment> activeInvestments;
 
     pthread_mutex_t closeRequestsLock;
     pthread_mutex_t rollbackRequestsLock;
+    pthread_mutex_t activeInvestmentsLock;
 
     ATM* getATM(int atmId);
     RWLock& getAccountsLock();
@@ -64,6 +81,7 @@ class Bank {
     void removeAccountUnsafe(int accountId);
     void submitCloseATMRequest(int sourceATMId, int targetATMId);
     void submitRollbackRequest(int atmId, int iterations);
+    void addInvestment(int accountId , int finalAmount, Currency currency, int timeMs);
 
     void closeVIPQueue();
 
@@ -81,6 +99,9 @@ class Bank {
     void printSnapshot(const BankSnapshot& snapshot);
     void processCloseRequests();
     void processRollbackRequests();
+    void processInvestments();
+    bool hasActiveInvestments();
+    bool hasPendingBankRequests();
 
     void chargeCommissions();
 
